@@ -186,6 +186,17 @@ const removeConsumer = (consumerId) => {
   consumers = consumers.filter(c => c.consumer.id !== consumerId)
 }
 
+
+/**
+ * Returns all producer IDs belonging to a specific peer.
+ * Called before removePeer so we can notify WS server.
+ */
+const getProducersForPeer = (socketId) => {
+  return producers
+    .filter(p => p.socketId === socketId)
+    .map(p => p.producer.id)
+}
+
 export {
   // rooms
   getOrCreateRoom,
@@ -201,6 +212,7 @@ export {
   removeConsumerTransport,
   // producers
   addProducer,
+  getProducersForPeer,
   getProducersInRoom,
   getOtherPeerSocketIds,
   // consumers

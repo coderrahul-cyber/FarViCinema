@@ -7,14 +7,12 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@repo/typescript-config": "workspace:*",
     "@repo/db": "workspace:*"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@repo/tokenconfig": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
     "jsonwebtoken": "^9.0.3"
   }

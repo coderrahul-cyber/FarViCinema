@@ -16,7 +16,7 @@ services:
       --maxmemory 256mb
       --maxmemory-policy allkeys-lru
     volumes:
-      - redis_data:/data
+      - ../../redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-videocall_secret}", "ping"]
       interval: 5s

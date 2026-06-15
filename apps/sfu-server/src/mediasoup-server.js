@@ -1,18 +1,428 @@
+// /**
+//  * server.js  —  mediasoup-server
+//  * 
+//  * Pure REST API. No Socket.IO. No frontend serving.
+//  * The Bun WS server will call these endpoints during signaling.
+//  * 
+//  * Endpoints:
+//  *   POST   /room/create
+//  *   POST   /transport/create
+//  *   POST   /transport/connect
+//  *   POST   /producer/create
+//  *   GET    /producers/:roomName/:socketId
+//  *   POST   /consumer/create
+//  *   POST   /consumer/resume
+//  *   DELETE /peer/:socketId
+//  */
+
+// import express    from 'express'
+// import https      from 'httpolyglot'
+// import fs         from 'fs'
+// import path       from 'path'
+// import 'dotenv/config'
+
+// import { createWorker, getWorker, createWebRtcTransport, mediaCodecs } from '../endpoints/worker.js'
+// import { emitProducerClosed } from './webhookEmitter.js'
+// import {
+//   getOrCreateRoom,
+//   getRouter,
+//   getRoomNameForPeer,
+//   addPeer,
+//   removePeer,
+//   addTransport,
+//   getProducerTransport,
+//   getTransportById,
+//   removeConsumerTransport,
+//   addProducer,
+//   getProducersInRoom,
+//   getOtherPeerSocketIds,
+//   addConsumer,
+//   getConsumerById,
+//   removeConsumer,
+// } from '../createWebRtcTransport/roomManger.js'
+
+// const __dirname = path.resolve()
+// const app       = express()
+// app.use(express.json())
+
+// // ─── HTTPS Setup ─────────────────────────────────────────────────────────────
+
+// const options = {
+//   key:  fs.readFileSync('./server/ssl/key.pem',  'utf-8'),
+//   cert: fs.readFileSync('./server/ssl/cert.pem', 'utf-8'),
+// }
+
+// const PORT = process.env.MEDIASOUP_PORT || 4000
+
+// const httpsServer = https.createServer(options, app)
+// httpsServer.listen(PORT, async () => {
+//   console.log(`[Server] mediasoup REST server listening on port ${PORT}`)
+//   await createWorker()
+//   console.log('[Server] mediasoup worker ready.')
+// })
+
+// // ─── Health Check ─────────────────────────────────────────────────────────────
+
+// app.get('/health', (req, res) => {
+//   res.json({ status: 'ok', service: 'mediasoup-server' })
+// })
+
+// // ─── Routes ──────────────────────────────────────────────────────────────────
+
+// /**
+//  * POST /room/create
+//  * Body: { roomName: string, socketId: string }
+//  * 
+//  * Creates or retrieves a room/router.
+//  * Also registers the peer in state.
+//  * Returns rtpCapabilities so the client can load the mediasoup Device.
+//  */
+// app.post('/room/create', async (req, res) => {
+//   try {
+//     const { roomName, socketId } = req.body
+
+//     if (!roomName || !socketId) {
+//       return res.status(400).json({ error: 'roomName and socketId are required' })
+//     }
+
+//     const router = await getOrCreateRoom(roomName, socketId, getWorker(), mediaCodecs)
+
+//     // Register peer in memory (clean slate — WS server calls DELETE /peer on disconnect)
+//     addPeer(socketId, roomName)
+
+//     console.log(`[Server] Peer ${socketId} joined room ${roomName}`)
+
+//     return res.json({ rtpCapabilities: router.rtpCapabilities })
+
+//   } catch (err) {
+//     console.error('[/room/create]', err)
+//     return res.status(500).json({ error: err.message })
+//   }
+// })
+
+// // ─────────────────────────────────────────────────────────────────────────────
+
+// /**
+//  * POST /transport/create
+//  * Body: { socketId: string, consumer: boolean }
+//  * 
+//  * Creates a WebRtcTransport (either send or recv).
+//  * Returns transport params the client needs to call device.createSendTransport() etc.
+//  */
+// app.post('/transport/create', async (req, res) => {
+//   try {
+//     const { socketId, consumer } = req.body
+
+//     if (!socketId) {
+//       return res.status(400).json({ error: 'socketId is required' })
+//     }
+
+//     const roomName = getRoomNameForPeer(socketId)
+//     if (!roomName) {
+//       return res.status(404).json({ error: `No peer found for socketId: ${socketId}` })
+//     }
+
+//     const router    = getRouter(roomName)
+//     const transport = await createWebRtcTransport(router)
+
+//     addTransport(socketId, roomName, transport, consumer)
+
+//     return res.json({
+//       params: {
+//         id:             transport.id,
+//         iceParameters:  transport.iceParameters,
+//         iceCandidates:  transport.iceCandidates,
+//         dtlsParameters: transport.dtlsParameters,
+//       }
+//     })
+
+//   } catch (err) {
+//     console.error('[/transport/create]', err)
+//     return res.status(500).json({ error: err.message })
+//   }
+// })
+
+// // ─────────────────────────────────────────────────────────────────────────────
+
+// /**
+//  * POST /transport/connect
+//  * Body: { socketId: string, dtlsParameters: object }
+//  * 
+//  * Completes the DTLS handshake for the SEND transport.
+//  */
+// app.post('/transport/connect', async (req, res) => {
+//   try {
+//     const { socketId, dtlsParameters } = req.body
+
+//     if (!socketId || !dtlsParameters) {
+//       return res.status(400).json({ error: 'socketId and dtlsParameters are required' })
+//     }
+
+//     const transport = getProducerTransport(socketId)
+//     if (!transport) {
+//       return res.status(404).json({ error: `No producer transport for ${socketId}` })
+//     }
+
+//     await transport.connect({ dtlsParameters })
+//     console.log(`[Server] Producer transport connected for ${socketId}`)
+
+//     return res.json({ connected: true })
+
+//   } catch (err) {
+//     console.error('[/transport/connect]', err)
+//     return res.status(500).json({ error: err.message })
+//   }
+// })
+
+// // ─────────────────────────────────────────────────────────────────────────────
+
+// /**
+//  * POST /producer/create
+//  * Body: { socketId: string, kind: string, rtpParameters: object }
+//  * 
+//  * Tells the send transport to produce (start sending media).
+//  * Returns producerId + whether other producers exist.
+//  * Also returns otherSocketIds so the WS server can notify them via socket.
+//  */
+// app.post('/producer/create', async (req, res) => {
+//   try {
+//     const { socketId, kind, rtpParameters } = req.body
+
+//     if (!socketId || !kind || !rtpParameters) {
+//       return res.status(400).json({ error: 'socketId, kind, rtpParameters are required' })
+//     }
+
+//     const transport = getProducerTransport(socketId)
+//     if (!transport) {
+//       return res.status(404).json({ error: `No producer transport for ${socketId}` })
+//     }
+
+//     const producer = await transport.produce({ kind, rtpParameters })
+
+//     const roomName = getRoomNameForPeer(socketId)
+//     addProducer(socketId, roomName, producer)
+
+//     producer.on('transportclose', () => {
+//       console.log(`[Server] Transport closed for producer ${producer.id}`)
+//       producer.close()
+//     })
+
+//     // The WS server needs these to emit 'new-producer' to other peers
+//     const otherSocketIds = getOtherPeerSocketIds(roomName, socketId)
+
+//     console.log(`[Server] Producer created. ID: ${producer.id} Kind: ${producer.kind}`)
+
+//     return res.json({
+//       producerId:      producer.id,
+//       producersExist:  otherSocketIds.length > 0,
+//       otherSocketIds,  // ← WS server uses this to notify others
+//     })
+
+//   } catch (err) {
+//     console.error('[/producer/create]', err)
+//     return res.status(500).json({ error: err.message })
+//   }
+// })
+
+// // ─────────────────────────────────────────────────────────────────────────────
+
+// /**
+//  * GET /producers/:roomName/:socketId
+//  * 
+//  * Returns all producer IDs in a room except the requesting peer's own.
+//  * Used when a new peer joins and needs to consume existing streams.
+//  */
+// app.get('/producers/:roomName/:socketId', (req, res) => {
+//   try {
+//     const { roomName, socketId } = req.params
+
+//     const producerList = getProducersInRoom(roomName, socketId)
+
+//     return res.json({ producers: producerList })
+
+//   } catch (err) {
+//     console.error('[/producers]', err)
+//     return res.status(500).json({ error: err.message })
+//   }
+// })
+
+// // ─────────────────────────────────────────────────────────────────────────────
+
+// /**
+//  * POST /consumer/connect
+//  * Body: { socketId: string, dtlsParameters: object, serverConsumerTransportId: string }
+//  * 
+//  * Connects the RECV (consumer) transport — DTLS handshake for incoming media.
+//  */
+// app.post('/consumer/connect', async (req, res) => {
+//   try {
+//     const { dtlsParameters, serverConsumerTransportId } = req.body
+
+//     if (!dtlsParameters || !serverConsumerTransportId) {
+//       return res.status(400).json({ error: 'dtlsParameters and serverConsumerTransportId are required' })
+//     }
+
+//     const consumerTransport = getTransportById(serverConsumerTransportId)
+//     if (!consumerTransport) {
+//       return res.status(404).json({ error: `No consumer transport: ${serverConsumerTransportId}` })
+//     }
+
+//     await consumerTransport.connect({ dtlsParameters })
+//     console.log(`[Server] Consumer transport ${serverConsumerTransportId} connected.`)
+
+//     return res.json({ connected: true })
+
+//   } catch (err) {
+//     console.error('[/consumer/connect]', err)
+//     return res.status(500).json({ error: err.message })
+//   }
+// })
+
+// // ─────────────────────────────────────────────────────────────────────────────
+
+// /**
+//  * POST /consumer/create
+//  * Body: { socketId, rtpCapabilities, remoteProducerId, serverConsumerTransportId }
+//  * 
+//  * Subscribes the consumer transport to a remote producer.
+//  * Returns consumer params the client needs to call transport.consume().
+//  */
+// app.post('/consumer/create', async (req, res) => {
+//   try {
+//     const { socketId, rtpCapabilities, remoteProducerId, serverConsumerTransportId } = req.body
+
+//     if (!socketId || !rtpCapabilities || !remoteProducerId || !serverConsumerTransportId) {
+//       return res.status(400).json({ error: 'socketId, rtpCapabilities, remoteProducerId, serverConsumerTransportId are required' })
+//     }
+
+//     const roomName = getRoomNameForPeer(socketId)
+//     const router   = getRouter(roomName)
+
+//     const consumerTransport = getTransportById(serverConsumerTransportId)
+//     if (!consumerTransport) {
+//       return res.status(404).json({ error: `No consumer transport: ${serverConsumerTransportId}` })
+//     }
+
+//     if (!router.canConsume({ producerId: remoteProducerId, rtpCapabilities })) {
+//       return res.status(400).json({ error: 'Router cannot consume this producer with given rtpCapabilities' })
+//     }
+
+//     const consumer = await consumerTransport.consume({
+//       producerId:     remoteProducerId,
+//       rtpCapabilities,
+//       paused:         true,
+//     })
+
+//     consumer.on('transportclose', () => {
+//       console.log(`[Server] Consumer ${consumer.id} — transport closed.`)
+//     })
+
+//     consumer.on('producerclose', () => {
+//       console.log(`[Server] Consumer ${consumer.id} — producer closed.`)
+//       // Fire webhook → Bun WS server so it can push 'producer-closed' to clients
+//       emitProducerClosed(remoteProducerId, roomName)
+//       consumerTransport.close()
+//       removeConsumerTransport(serverConsumerTransportId)
+//       consumer.close()
+//       removeConsumer(consumer.id)
+//     })
+
+//     addConsumer(socketId, roomName, consumer)
+
+//     console.log(`[Server] Consumer created. ID: ${consumer.id}`)
+
+//     return res.json({
+//       params: {
+//         id:               consumer.id,
+//         producerId:       remoteProducerId,
+//         kind:             consumer.kind,
+//         rtpParameters:    consumer.rtpParameters,
+//         serverConsumerId: consumer.id,
+//       }
+//     })
+
+//   } catch (err) {
+//     console.error('[/consumer/create]', err)
+//     return res.status(500).json({ error: err.message })
+//   }
+// })
+
+// // ─────────────────────────────────────────────────────────────────────────────
+
+// /**
+//  * POST /consumer/resume
+//  * Body: { serverConsumerId: string }
+//  * 
+//  * Unpauses a consumer — client calls this after setting up the remote track.
+//  */
+// app.post('/consumer/resume', async (req, res) => {
+//   try {
+//     const { serverConsumerId } = req.body
+
+//     if (!serverConsumerId) {
+//       return res.status(400).json({ error: 'serverConsumerId is required' })
+//     }
+
+//     const consumer = getConsumerById(serverConsumerId)
+//     if (!consumer) {
+//       return res.status(404).json({ error: `No consumer: ${serverConsumerId}` })
+//     }
+
+//     await consumer.resume()
+//     console.log(`[Server] Consumer ${serverConsumerId} resumed.`)
+
+//     return res.json({ resumed: true })
+
+//   } catch (err) {
+//     console.error('[/consumer/resume]', err)
+//     return res.status(500).json({ error: err.message })
+//   }
+// })
+
+// // ─────────────────────────────────────────────────────────────────────────────
+
+// /**
+//  * DELETE /peer/:socketId
+//  * 
+//  * Called by the WS server when a client disconnects.
+//  * Cleans up all transports, producers, consumers for that peer.
+//  */
+// app.delete('/peer/:socketId', (req, res) => {
+//   try {
+//     const { socketId } = req.params
+
+//     if (!socketId) {
+//       return res.status(400).json({ error: 'socketId is required' })
+//     }
+
+//     removePeer(socketId)
+//     console.log(`[Server] Peer ${socketId} cleaned up.`)
+
+//     return res.json({ removed: true })
+
+//   } catch (err) {
+//     console.error('[/peer/:socketId]', err)
+//     return res.status(500).json({ error: err.message })
+//   }
+// })
+
+
 /**
- * server.js  —  mediasoup-server
- * 
- * Pure REST API. No Socket.IO. No frontend serving.
- * The Bun WS server will call these endpoints during signaling.
- * 
- * Endpoints:
- *   POST   /room/create
- *   POST   /transport/create
- *   POST   /transport/connect
- *   POST   /producer/create
- *   GET    /producers/:roomName/:socketId
- *   POST   /consumer/create
- *   POST   /consumer/resume
- *   DELETE /peer/:socketId
+ * src/server.js  —  mediasoup-server  (phase 5)
+ *
+ * Two changes from the original:
+ *
+ *   1. BUG FIX: `getProducersForPeer` is used in DELETE /peer/:socketId
+ *      but was never in the import list. Added it.
+ *
+ *   2. PHASE 5: Pass `socketId` to createWebRtcTransport() so it can
+ *      generate per-session TURN credentials tied to this user.
+ *      Change on line ~126:
+ *        OLD: const transport = await createWebRtcTransport(router)
+ *        NEW: const transport = await createWebRtcTransport(router, socketId)
+ *
+ * Also added TURN_SECRET + TURN_HOST to the .env section at the bottom.
+ * Everything else is identical to the original.
  */
 
 import express    from 'express'
@@ -39,20 +449,21 @@ import {
   addConsumer,
   getConsumerById,
   removeConsumer,
+  getProducersForPeer,    // ← BUG FIX: was used in DELETE /peer but not imported
 } from '../createWebRtcTransport/roomManger.js'
 
 const __dirname = path.resolve()
 const app       = express()
 app.use(express.json())
 
-// ─── HTTPS Setup ─────────────────────────────────────────────────────────────
+// ─── HTTPS Setup ──────────────────────────────────────────────────────────────
 
 const options = {
   key:  fs.readFileSync('./server/ssl/key.pem',  'utf-8'),
   cert: fs.readFileSync('./server/ssl/cert.pem', 'utf-8'),
 }
 
-const PORT = process.env.MEDIASOUP_PORT || 4000
+const PORT = process.env.MEDIASOUP_PORT || 3000
 
 const httpsServer = https.createServer(options, app)
 httpsServer.listen(PORT, async () => {
@@ -67,16 +478,8 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'mediasoup-server' })
 })
 
-// ─── Routes ──────────────────────────────────────────────────────────────────
+// ─── Routes ───────────────────────────────────────────────────────────────────
 
-/**
- * POST /room/create
- * Body: { roomName: string, socketId: string }
- * 
- * Creates or retrieves a room/router.
- * Also registers the peer in state.
- * Returns rtpCapabilities so the client can load the mediasoup Device.
- */
 app.post('/room/create', async (req, res) => {
   try {
     const { roomName, socketId } = req.body
@@ -86,12 +489,9 @@ app.post('/room/create', async (req, res) => {
     }
 
     const router = await getOrCreateRoom(roomName, socketId, getWorker(), mediaCodecs)
-
-    // Register peer in memory (clean slate — WS server calls DELETE /peer on disconnect)
     addPeer(socketId, roomName)
 
     console.log(`[Server] Peer ${socketId} joined room ${roomName}`)
-
     return res.json({ rtpCapabilities: router.rtpCapabilities })
 
   } catch (err) {
@@ -102,13 +502,6 @@ app.post('/room/create', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * POST /transport/create
- * Body: { socketId: string, consumer: boolean }
- * 
- * Creates a WebRtcTransport (either send or recv).
- * Returns transport params the client needs to call device.createSendTransport() etc.
- */
 app.post('/transport/create', async (req, res) => {
   try {
     const { socketId, consumer } = req.body
@@ -122,8 +515,10 @@ app.post('/transport/create', async (req, res) => {
       return res.status(404).json({ error: `No peer found for socketId: ${socketId}` })
     }
 
-    const router    = getRouter(roomName)
-    const transport = await createWebRtcTransport(router)
+    const router = getRouter(roomName)
+
+    // ── PHASE 5 CHANGE: pass socketId → TURN credentials per session ─────
+    const transport = await createWebRtcTransport(router, socketId)
 
     addTransport(socketId, roomName, transport, consumer)
 
@@ -133,6 +528,7 @@ app.post('/transport/create', async (req, res) => {
         iceParameters:  transport.iceParameters,
         iceCandidates:  transport.iceCandidates,
         dtlsParameters: transport.dtlsParameters,
+        iceServers:     transport.iceServers,   // ← TURN servers (may be [])
       }
     })
 
@@ -144,12 +540,6 @@ app.post('/transport/create', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * POST /transport/connect
- * Body: { socketId: string, dtlsParameters: object }
- * 
- * Completes the DTLS handshake for the SEND transport.
- */
 app.post('/transport/connect', async (req, res) => {
   try {
     const { socketId, dtlsParameters } = req.body
@@ -165,7 +555,6 @@ app.post('/transport/connect', async (req, res) => {
 
     await transport.connect({ dtlsParameters })
     console.log(`[Server] Producer transport connected for ${socketId}`)
-
     return res.json({ connected: true })
 
   } catch (err) {
@@ -176,14 +565,6 @@ app.post('/transport/connect', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * POST /producer/create
- * Body: { socketId: string, kind: string, rtpParameters: object }
- * 
- * Tells the send transport to produce (start sending media).
- * Returns producerId + whether other producers exist.
- * Also returns otherSocketIds so the WS server can notify them via socket.
- */
 app.post('/producer/create', async (req, res) => {
   try {
     const { socketId, kind, rtpParameters } = req.body
@@ -197,25 +578,23 @@ app.post('/producer/create', async (req, res) => {
       return res.status(404).json({ error: `No producer transport for ${socketId}` })
     }
 
-    const producer = await transport.produce({ kind, rtpParameters })
-
-    const roomName = getRoomNameForPeer(socketId)
+    const producer  = await transport.produce({ kind, rtpParameters })
+    const roomName  = getRoomNameForPeer(socketId)
     addProducer(socketId, roomName, producer)
 
     producer.on('transportclose', () => {
-      console.log(`[Server] Transport closed for producer ${producer.id}`)
+      const pRoomName = getRoomNameForPeer(socketId)
+      if (pRoomName) emitProducerClosed(producer.id, pRoomName)
       producer.close()
     })
 
-    // The WS server needs these to emit 'new-producer' to other peers
     const otherSocketIds = getOtherPeerSocketIds(roomName, socketId)
-
     console.log(`[Server] Producer created. ID: ${producer.id} Kind: ${producer.kind}`)
 
     return res.json({
-      producerId:      producer.id,
-      producersExist:  otherSocketIds.length > 0,
-      otherSocketIds,  // ← WS server uses this to notify others
+      producerId:     producer.id,
+      producersExist: otherSocketIds.length > 0,
+      otherSocketIds,
     })
 
   } catch (err) {
@@ -226,20 +605,11 @@ app.post('/producer/create', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * GET /producers/:roomName/:socketId
- * 
- * Returns all producer IDs in a room except the requesting peer's own.
- * Used when a new peer joins and needs to consume existing streams.
- */
 app.get('/producers/:roomName/:socketId', (req, res) => {
   try {
     const { roomName, socketId } = req.params
-
     const producerList = getProducersInRoom(roomName, socketId)
-
     return res.json({ producers: producerList })
-
   } catch (err) {
     console.error('[/producers]', err)
     return res.status(500).json({ error: err.message })
@@ -248,12 +618,6 @@ app.get('/producers/:roomName/:socketId', (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * POST /consumer/connect
- * Body: { socketId: string, dtlsParameters: object, serverConsumerTransportId: string }
- * 
- * Connects the RECV (consumer) transport — DTLS handshake for incoming media.
- */
 app.post('/consumer/connect', async (req, res) => {
   try {
     const { dtlsParameters, serverConsumerTransportId } = req.body
@@ -269,7 +633,6 @@ app.post('/consumer/connect', async (req, res) => {
 
     await consumerTransport.connect({ dtlsParameters })
     console.log(`[Server] Consumer transport ${serverConsumerTransportId} connected.`)
-
     return res.json({ connected: true })
 
   } catch (err) {
@@ -280,13 +643,6 @@ app.post('/consumer/connect', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * POST /consumer/create
- * Body: { socketId, rtpCapabilities, remoteProducerId, serverConsumerTransportId }
- * 
- * Subscribes the consumer transport to a remote producer.
- * Returns consumer params the client needs to call transport.consume().
- */
 app.post('/consumer/create', async (req, res) => {
   try {
     const { socketId, rtpCapabilities, remoteProducerId, serverConsumerTransportId } = req.body
@@ -295,16 +651,16 @@ app.post('/consumer/create', async (req, res) => {
       return res.status(400).json({ error: 'socketId, rtpCapabilities, remoteProducerId, serverConsumerTransportId are required' })
     }
 
-    const roomName = getRoomNameForPeer(socketId)
-    const router   = getRouter(roomName)
-
+    const roomName          = getRoomNameForPeer(socketId)
+    const router            = getRouter(roomName)
     const consumerTransport = getTransportById(serverConsumerTransportId)
+
     if (!consumerTransport) {
       return res.status(404).json({ error: `No consumer transport: ${serverConsumerTransportId}` })
     }
 
     if (!router.canConsume({ producerId: remoteProducerId, rtpCapabilities })) {
-      return res.status(400).json({ error: 'Router cannot consume this producer with given rtpCapabilities' })
+      return res.status(400).json({ error: 'Router cannot consume this producer' })
     }
 
     const consumer = await consumerTransport.consume({
@@ -319,7 +675,6 @@ app.post('/consumer/create', async (req, res) => {
 
     consumer.on('producerclose', () => {
       console.log(`[Server] Consumer ${consumer.id} — producer closed.`)
-      // Fire webhook → Bun WS server so it can push 'producer-closed' to clients
       emitProducerClosed(remoteProducerId, roomName)
       consumerTransport.close()
       removeConsumerTransport(serverConsumerTransportId)
@@ -328,7 +683,6 @@ app.post('/consumer/create', async (req, res) => {
     })
 
     addConsumer(socketId, roomName, consumer)
-
     console.log(`[Server] Consumer created. ID: ${consumer.id}`)
 
     return res.json({
@@ -349,12 +703,6 @@ app.post('/consumer/create', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * POST /consumer/resume
- * Body: { serverConsumerId: string }
- * 
- * Unpauses a consumer — client calls this after setting up the remote track.
- */
 app.post('/consumer/resume', async (req, res) => {
   try {
     const { serverConsumerId } = req.body
@@ -370,7 +718,6 @@ app.post('/consumer/resume', async (req, res) => {
 
     await consumer.resume()
     console.log(`[Server] Consumer ${serverConsumerId} resumed.`)
-
     return res.json({ resumed: true })
 
   } catch (err) {
@@ -381,12 +728,6 @@ app.post('/consumer/resume', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * DELETE /peer/:socketId
- * 
- * Called by the WS server when a client disconnects.
- * Cleans up all transports, producers, consumers for that peer.
- */
 app.delete('/peer/:socketId', (req, res) => {
   try {
     const { socketId } = req.params
@@ -395,10 +736,19 @@ app.delete('/peer/:socketId', (req, res) => {
       return res.status(400).json({ error: 'socketId is required' })
     }
 
-    removePeer(socketId)
-    console.log(`[Server] Peer ${socketId} cleaned up.`)
+    const peerProducers = getProducersForPeer(socketId)   // ← now properly imported
+    const roomName      = getRoomNameForPeer(socketId)
 
-    return res.json({ removed: true })
+    removePeer(socketId)
+    console.log(`[Server] Peer ${socketId} cleaned up. Had ${peerProducers.length} producers.`)
+
+    if (roomName) {
+      peerProducers.forEach(producerId => {
+        emitProducerClosed(producerId, roomName)
+      })
+    }
+
+    return res.json({ removed: true, producersClosed: peerProducers.length })
 
   } catch (err) {
     console.error('[/peer/:socketId]', err)

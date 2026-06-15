@@ -208,8 +208,143 @@
  * Everything else is identical to the original.
  */
 
+// import { verifyToken }            from './auth.js'
+// import { connectRedis }           from './redis.js'
+// import { registerSocket,
+//          unregisterSocket }       from './socketR.js'
+// import { handleJoinRoom }         from './handler/joinRoom.js'
+// import { handleCreateTransport }  from './handler/createTransport.js'
+// import { handleTransportConnect } from './handler/transportConnect.js'
+// import { handleProduce }          from './handler/produce.js'
+// import { handleGetProducers }     from './handler/getProducers.js'
+// import { handleRecvConnect,
+//          handleConsume }          from './handler/consume.js'
+// import { handleConsumerResume }   from './handler/consumeResume.js'
+// import { handleProducerClosed }   from './webhookHandler.js'
+// import * as mediasoup             from './mediasoupClient.js'
+
+// const PORT = Number(process.env.WS_PORT) || 8080
+
+// export interface WSData {
+//   socketId: string
+//   user: { id: string; name: string }
+// }
+
+// // ── CHANGE 1: Connect to Redis before accepting any connections ───────────────
+// await connectRedis()
+
+// // ─── Server ───────────────────────────────────────────────────────────────────
+
+// Bun.serve<WSData>({
+//   port: PORT,
+
+//   async fetch(req, server) {
+//     const url = new URL(req.url)
+
+//     if (req.method === 'GET' && url.pathname === '/health') {
+//       return new Response(JSON.stringify({ status: 'ok', service: 'ws-server' }), {
+//         headers: { 'Content-Type': 'application/json' }
+//       })
+//     }
+
+//     if (req.method === 'POST' && url.pathname === '/webhook/producer-closed') {
+//       const body = await req.json()
+//       return handleProducerClosed(body)
+//     }
+
+//     if (req.method === 'GET' && url.pathname === '/') {
+//       const token = url.searchParams.get('token')
+//       if (!token) return new Response('Missing token', { status: 401 })
+
+//       const user = verifyToken(token)
+//       if (!user)  return new Response('Invalid or expired token', { status: 401 })
+
+//       const socketId = crypto.randomUUID()
+//       const upgraded = server.upgrade(req, { data: { socketId, user } satisfies WSData })
+//       if (upgraded) return undefined
+//       return new Response('WebSocket upgrade failed', { status: 500 })
+//     }
+
+//     return new Response('Not found', { status: 404 })
+//   },
+
+//   websocket: {
+
+//     async open(ws) {
+//       // CHANGE 2: registerSocket is now async
+//       await registerSocket(ws.data.socketId, ws)
+
+//       ws.send(JSON.stringify({
+//         type:    'connection-success',
+//         payload: { socketId: ws.data.socketId }
+//       }))
+
+//       console.log(`[WS] Connected: socketId=${ws.data.socketId} user=${ws.data.user.name}`)
+//     },
+
+//     async message(ws, raw) {
+//       let parsed: { type: string; payload: any }
+//       try {
+//         parsed = JSON.parse(raw as string)
+//       } catch {
+//         ws.send(JSON.stringify({ type: 'error', payload: { message: 'Invalid JSON' } }))
+//         return
+//       }
+
+//       const { type, payload } = parsed
+
+//       try {
+//         switch (type) {
+//           case 'joinRoom':              await handleJoinRoom(ws, payload);          break
+//           case 'createWebRtcTransport': await handleCreateTransport(ws, payload);   break
+//           case 'transport-connect':     await handleTransportConnect(ws, payload);  break
+//           case 'transport-produce':     await handleProduce(ws, payload);           break
+//           case 'getProducers':          await handleGetProducers(ws, payload);      break
+//           case 'transport-recv-connect':await handleRecvConnect(ws, payload);       break
+//           case 'consume':               await handleConsume(ws, payload);           break
+//           case 'consumer-resume':       await handleConsumerResume(ws, payload);    break
+//           default:
+//             ws.send(JSON.stringify({ type: 'error', payload: { message: `Unknown type: ${type}` } }))
+//         }
+//       } catch (err: any) {
+//         console.error(`[WS] Error handling '${type}':`, err)
+//         ws.send(JSON.stringify({ type: 'error', payload: { message: err.message ?? 'Internal error' } }))
+//       }
+//     },
+
+//     async close(ws) {
+//       const { socketId, user } = ws.data
+//       console.log(`[WS] Disconnected: socketId=${socketId} user=${user.name}`)
+
+//       try {
+//         await mediasoup.removePeer(socketId)
+//       } catch (err) {
+//         console.error(`[WS] Failed to remove peer ${socketId}:`, err)
+//       }
+
+//       // CHANGE 3: unregisterSocket is now async
+//       await unregisterSocket(socketId)
+//     },
+//   },
+// })
+
+// console.log(`[WS Server] Listening on port ${PORT}`)
+
+
+
+//Phase2:
+/**
+ * index.ts  —  ws-server (phase 2)
+ *
+ * One change from phase 1:
+ *   close() reads the mediasoup URL before unregistering (to call correct server)
+ *   then cleans up the socket:mediasoup:{socketId} key from Redis.
+ *
+ * Everything else identical to phase 1.
+ */
+
 import { verifyToken }            from './auth.js'
-import { connectRedis }           from './redis.js'
+import { connectRedis, pub }      from './redis.js'
 import { registerSocket,
          unregisterSocket }       from './socketR.js'
 import { handleJoinRoom }         from './handler/joinRoom.js'
@@ -222,6 +357,7 @@ import { handleRecvConnect,
 import { handleConsumerResume }   from './handler/consumeResume.js'
 import { handleProducerClosed }   from './webhookHandler.js'
 import * as mediasoup             from './mediasoupClient.js'
+import { getMediasoupUrl }        from './getMedisoupUrl.js'
 
 const PORT = Number(process.env.WS_PORT) || 8080
 
@@ -230,10 +366,7 @@ export interface WSData {
   user: { id: string; name: string }
 }
 
-// ── CHANGE 1: Connect to Redis before accepting any connections ───────────────
 await connectRedis()
-
-// ─── Server ───────────────────────────────────────────────────────────────────
 
 Bun.serve<WSData>({
   port: PORT,
@@ -252,7 +385,20 @@ Bun.serve<WSData>({
       return handleProducerClosed(body)
     }
 
-    if (req.method === 'GET' && url.pathname === '/') {
+    if (req.method === 'GET' && url.pathname === '/' ) {
+      const token = url.searchParams.get('token')
+      if (!token) return new Response('Missing token', { status: 401 })
+
+      const user = verifyToken(token)
+      if (!user)  return new Response('Invalid or expired token', { status: 401 })
+
+      const socketId = crypto.randomUUID()
+      const upgraded = server.upgrade(req, { data: { socketId, user } satisfies WSData })
+      if (upgraded) return undefined
+      return new Response('WebSocket upgrade failed', { status: 500 })
+    }
+
+    if (req.method === 'GET' && url.pathname === '/ws' ) {
       const token = url.searchParams.get('token')
       if (!token) return new Response('Missing token', { status: 401 })
 
@@ -269,17 +415,13 @@ Bun.serve<WSData>({
   },
 
   websocket: {
-
     async open(ws) {
-      // CHANGE 2: registerSocket is now async
       await registerSocket(ws.data.socketId, ws)
-
       ws.send(JSON.stringify({
         type:    'connection-success',
         payload: { socketId: ws.data.socketId }
       }))
-
-      console.log(`[WS] Connected: socketId=${ws.data.socketId} user=${ws.data.user.name}`)
+      console.log(`[WS] Connected: ${ws.data.socketId} (${ws.data.user.name})`)
     },
 
     async message(ws, raw) {
@@ -290,40 +432,45 @@ Bun.serve<WSData>({
         ws.send(JSON.stringify({ type: 'error', payload: { message: 'Invalid JSON' } }))
         return
       }
-
       const { type, payload } = parsed
-
       try {
         switch (type) {
-          case 'joinRoom':              await handleJoinRoom(ws, payload);          break
-          case 'createWebRtcTransport': await handleCreateTransport(ws, payload);   break
-          case 'transport-connect':     await handleTransportConnect(ws, payload);  break
-          case 'transport-produce':     await handleProduce(ws, payload);           break
-          case 'getProducers':          await handleGetProducers(ws, payload);      break
-          case 'transport-recv-connect':await handleRecvConnect(ws, payload);       break
-          case 'consume':               await handleConsume(ws, payload);           break
-          case 'consumer-resume':       await handleConsumerResume(ws, payload);    break
+          case 'joinRoom':               await handleJoinRoom(ws, payload);          break
+          case 'createWebRtcTransport':  await handleCreateTransport(ws, payload);   break
+          case 'transport-connect':      await handleTransportConnect(ws, payload);  break
+          case 'transport-produce':      await handleProduce(ws, payload);           break
+          case 'getProducers':           await handleGetProducers(ws, payload);      break
+          case 'transport-recv-connect': await handleRecvConnect(ws, payload);       break
+          case 'consume':                await handleConsume(ws, payload);           break
+          case 'consumer-resume':        await handleConsumerResume(ws, payload);    break
           default:
-            ws.send(JSON.stringify({ type: 'error', payload: { message: `Unknown type: ${type}` } }))
+            ws.send(JSON.stringify({ type: 'error', payload: { message: `Unknown: ${type}` } }))
         }
       } catch (err: any) {
-        console.error(`[WS] Error handling '${type}':`, err)
+        console.error(`[WS] Error in '${type}':`, err)
         ws.send(JSON.stringify({ type: 'error', payload: { message: err.message ?? 'Internal error' } }))
       }
     },
 
-    async close(ws) {
+     async close(ws) {
       const { socketId, user } = ws.data
-      console.log(`[WS] Disconnected: socketId=${socketId} user=${user.name}`)
+      console.log(`[DEBUG-Close] ▶ peer disconnected: ${socketId} (${user.name})`)
 
       try {
-        await mediasoup.removePeer(socketId)
-      } catch (err) {
-        console.error(`[WS] Failed to remove peer ${socketId}:`, err)
+        const msUrl = await getMediasoupUrl(socketId)
+        console.log(`[DEBUG-Close]   calling mediasoup.removePeer at ${msUrl}`)
+        const result = await mediasoup.removePeer(socketId, msUrl)
+        console.log(`[DEBUG-Close]   mediasoup.removePeer result:`, result)
+        console.log(`[DEBUG-Close]   ✓ webhook should now fire from mediasoup`)
+      } catch (err: any) {
+        console.error(`[DEBUG-Close] ✗ removePeer FAILED for ${socketId}:`, err.message)
+        console.error(`[DEBUG-Close]   This means mediasoup never received DELETE /peer`)
+        console.error(`[DEBUG-Close]   → webhook will NOT fire → tile will NOT disappear`)
       }
 
-      // CHANGE 3: unregisterSocket is now async
+      await pub.send('DEL', [`socket:mediasoup:${socketId}`])
       await unregisterSocket(socketId)
+      console.log(`[DEBUG-Close]   ✓ unregisterSocket done for ${socketId}`)
     },
   },
 })

@@ -4,14 +4,13 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "next dev --port 3001",
     "build": "next build",
     "start": "next start",
     "lint": "eslint --max-warnings 0",
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
-    "@repo/ui": "*",
     "jsonwebtoken": "^9.0.3",
     "mediasoup-client": "^3.18.7",
     "next": "^16.0.0",
@@ -20,7 +19,6 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
-    "@repo/eslint-config": "*",
     "@repo/typescript-config": "*",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.15.3",

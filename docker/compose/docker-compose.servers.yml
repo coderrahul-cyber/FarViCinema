@@ -1,0 +1,62 @@
+
+# docker-compose.dev.yml
+#
+# Runs ONLY the infrastructure services in Docker:
+#   - Redis          (state store + pub/sub)
+#   - Redis Commander (web UI to inspect Redis keys)
+#   - NGINX          (SSL termination, proxies to your local ws-server)
+#   - coturn         (TURN relay server)
+#
+# Everything else runs directly on your machine:
+#   - mediasoup-server  →  node src/server.js   (port 3000)
+#   - ws-server         →  bun src/index.ts     (port 8080)
+#   - room-router       →  node src/index.js    (port 9000)
+#   - frontend          →  npm run dev          (port 3001)
+#
+# Start with:
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# NGINX proxies wss://localhost → ws://host.docker.internal:8080
+# So your frontend connects to wss://localhost and NGINX forwards
+# to your locally running Bun ws-server on port 8080.
+
+networks:
+  videocall-dev:
+    driver: bridge
+
+services:
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+
+  # ── NGINX ──────────────────────────────────────────────────────────────────
+  # Provides SSL termination for local dev.
+  # Proxies wss://localhost → ws://host.docker.internal:8080 (your Bun ws-server)
+  # This lets the browser connect via wss:// (required by most browsers for WebRTC)
+  # while your ws-server runs as plain http/ws on port 8080.
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: videocall-nginx
+    restart: unless-stopped
+    networks: [videocall-dev]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # lets NGINX reach your local ports
+    ports:
+      - "80:80"     # HTTP → redirects to 443
+      - "443:443"   # HTTPS + WSS
+    volumes:
+      - ../../nginx/nginx.dev.conf:/etc/nginx/nginx.conf:ro
+      - ../../nginx/ssl:/etc/nginx/ssl:ro
+
+  # ── coturn TURN server ─────────────────────────────────────────────────────
+  # MUST use host network — TURN relay ports must be directly reachable.
+  # For local dev: TURN will work on LAN, not over internet (no public IP).
+  # Set external-ip in turnserver.conf to your LAN IP for LAN testing.
+  coturn:
+    image: coturn/coturn:4.6-alpine
+    container_name: videocall-coturn
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ../../coturn/turnserver.dev.conf:/etc/coturn/turnserver.conf:ro
+      - ../../coturn/ssl:/etc/coturn/ssl:ro
+    command: ["-c", "/etc/coturn/turnserver.conf"]

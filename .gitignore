@@ -39,3 +39,7 @@ yarn-error.log*
 
 
 /db_data
+
+/redis_data
+
+/script

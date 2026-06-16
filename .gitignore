@@ -42,3 +42,6 @@ yarn-error.log*
   
 redis_data/
 script/
+
+couturn/ssl
+nginx/ssl

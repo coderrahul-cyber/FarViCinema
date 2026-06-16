@@ -4,6 +4,7 @@ Content in this file is for noting down the problems i have faced and the soluti
 Table of Contents:
 - [Things To Be Noted](#things-to-be-noted)
   - [For localy tesing](#for-localy-tesing)
+  - [What changed from same-machine to LAN:](#what-changed-from-same-machine-to-lan)
   - [ENV PROBLEM IN TURBOREPO (I don't know what happen after this the code runs fine , if future it crash use the method below to fix it again)](#env-problem-in-turborepo-i-dont-know-what-happen-after-this-the-code-runs-fine--if-future-it-crash-use-the-method-below-to-fix-it-again)
   - [NGINX AND COTURN THINGS](#nginx-and-coturn-things)
     - [1. Nginx config for dev](#1-nginx-config-for-dev)
@@ -28,9 +29,30 @@ New-NetFirewallRule -DisplayName "Allow TCP 8080" `
   -LocalPort 8080 `
   -Action Allow
 ```
+And Also Cross origin fix for next js 
+```ts
+const nextConfig = {
+  output: 'standalone',
+  allowedDevOrigins: [
+    '<IP>', // Replace with your LAN IP address
+    'localhost',
+  ],
+}
+```
 
+### What changed from same-machine to LAN:
 
+* ANNOUNCED_IP → your LAN IP (so WebRTC ICE candidates point to the right place)
+* NEXT_PUBLIC_WS_URL → wss://<IP>/ws (phone can't resolve localhost)
+* Regenerated mkcert cert to cover the LAN IP (so HTTPS works on the phone)
+* Installed mkcert root CA on Android (so Chrome trusts the cert and allows mediaDevices)
+* Firewall* ports 2000-2200/UDP open on Windows
+* Next.js started with -H 0.0.0.0
 
+__When switching back to same-machine testing, just flip these two back:__  
+* ANNOUNCED_IP=127.0.0.1
+* NEXT_PUBLIC_WS_URL=ws://localhost:8080
+* And restart mediasoup and Next.js. Everything else stays the same.
 
 ### ENV PROBLEM IN TURBOREPO (I don't know what happen after this the code runs fine , if future it crash use the method below to fix it again)
 There is an issue with environment variables not being picked up correctly in a Turborepo monorepo setup, particularly when using Bun as the runtime. The problem seems to stem from how environment variables are loaded and accessed across different packages in the monorepo.   

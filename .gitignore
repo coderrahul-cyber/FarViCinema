@@ -40,6 +40,5 @@ yarn-error.log*
 
 /db_data
   
-./redis_data
-
-./script
+redis_data/
+script/

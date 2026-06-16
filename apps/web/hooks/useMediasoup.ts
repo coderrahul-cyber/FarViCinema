@@ -1106,6 +1106,8 @@ export const useMediasoup = (roomName: string, token: string, displayName: strin
 
   const wsRef            = useRef<WSClient | null>(null)
   const deviceRef        = useRef<Device | null>(null)
+  // Add this ref at the top of useMediasoup alongside the others:
+const joiningRef = useRef(false)
   const sendTransportRef = useRef<any>(null)
   const recvTransportRef = useRef<any>(null)
   const producersRef     = useRef<Map<string, any>>(new Map())
@@ -1226,23 +1228,45 @@ export const useMediasoup = (roomName: string, token: string, displayName: strin
 
   // ── Create transports ──────────────────────────────────────────────────────
 
-  const createRecvTransport = useCallback(async () => {
-    const ws = wsRef.current!
-    const device = deviceRef.current!
-    const { params } = await ws.request('createWebRtcTransport', { consumer: true })
-    const transport   = device.createRecvTransport(params)
-    recvTransportRef.current = transport
-    transport.on('connect', ({ dtlsParameters }: any, cb: any, eb: any) => {
-      ws.request('transport-recv-connect', {
-        dtlsParameters,
-        serverConsumerTransportId: transport.id,
-      }).then(cb).catch(eb)
-    })
-    transport.on('connectionstatechange', (state: string) => {
-      if (state === 'failed') console.error('[recvTransport] ICE failed — check ANNOUNCED_IP')
-    })
-  }, [])
+ const createRecvTransport = useCallback(async () => {
+  if (recvTransportRef.current) {
+    recvTransportRef.current.close()
+    recvTransportRef.current = null
+  }
 
+  const ws     = wsRef.current!
+  const device = deviceRef.current!
+  const { params } = await ws.request('createWebRtcTransport', { consumer: true })
+  const transport   = device.createRecvTransport(params)
+  recvTransportRef.current = transport
+
+  transport.on('connect', ({ dtlsParameters }: any, cb: any, eb: any) => {
+    ws.request('transport-recv-connect', {
+      dtlsParameters,
+      serverConsumerTransportId: transport.id,
+    }).then(cb).catch(eb)
+  })
+
+  transport.on('connectionstatechange', async (state: string) => {
+    console.log('[recvTransport] state:', state)
+    if (state !== 'failed' && state !== 'disconnected') return
+    // This transport is dead — null the ref immediately so no new consume calls use it
+    recvTransportRef.current = null
+    console.warn('[recvTransport] ICE failed — recreating and re-consuming')
+    try {
+      // Snapshot which producers we were consuming before clearing state
+      const toReconsume = Array.from(consumersRef.current.keys())
+      consumersRef.current.forEach(c => c.close())
+      consumersRef.current.clear()
+      consumingSet.current.clear()
+      // Recreate transport then re-consume everyone
+      await createRecvTransport()
+      for (const pid of toReconsume) await consumeProducer(pid)
+    } catch (e: any) {
+      console.error('[recvTransport] failed to recover:', e.message)
+    }
+  })
+}, [consumeProducer])
   const createSendTransport = useCallback(async (stream: MediaStream) => {
     const ws = wsRef.current!
     const device = deviceRef.current!
@@ -1296,7 +1320,8 @@ export const useMediasoup = (roomName: string, token: string, displayName: strin
 
     try {
       // Re-register listeners (new connection = new socketId)
-      ws.on('new-producer', async ({ producerId }: any) => {
+      ws.on('new-producer', async ({ producerId ,  producerSocketId  }: any) => {
+          if (producerSocketId === localSocketId.current) return
         await consumeProducer(producerId)
       })
       ws.on('producer-closed', ({ remoteProducerId }: any) => {
@@ -1368,6 +1393,8 @@ export const useMediasoup = (roomName: string, token: string, displayName: strin
 
   const join = useCallback(async () => {
     if (connectionState !== 'idle') return
+     if (joiningRef.current) return   // ← ADD THIS — blocks StrictMode second call
+  joiningRef.current = true        // ← ADD THIS
     setConnectionState('connecting')
     setError(null)
 
@@ -1388,9 +1415,14 @@ export const useMediasoup = (roomName: string, token: string, displayName: strin
       const { socketId } = await ws.connect()
       localSocketId.current = socketId
 
-      ws.on('new-producer', async ({ producerId }: any) => {
-        await consumeProducer(producerId)
-      })
+     ws.on('new-producer', async ({ producerId, producerSocketId }: any) => {
+  // Don't consume our own producers — we can't consume what we produce.
+  // Without this guard, when createSendTransport fires and mediasoup broadcasts
+  // 'new-producer' to the room, we receive our own event and try to consume
+  // ourselves, which puts the recv transport into a bad DTLS state → ICE failure.
+  if (producerSocketId === localSocketId.current) return
+  await consumeProducer(producerId)
+})
 
       ws.on('producer-closed', ({ remoteProducerId }: any) => {
         // Use lookup map so we find the tile even if it's the AUDIO producer that closed first.
@@ -1448,6 +1480,7 @@ export const useMediasoup = (roomName: string, token: string, displayName: strin
       setConnectionState('connected')
 
     } catch (err: any) {
+       joiningRef.current = false     
       setError(err.message ?? 'Failed to join')
       setConnectionState('error')
     }

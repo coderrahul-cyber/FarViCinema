@@ -102,14 +102,27 @@ export const handleConsume = async (
 
   const url = await getMediasoupUrl(socketId)
 
-  const { params } = await mediasoup.createConsumer(
-    socketId, rtpCapabilities, remoteProducerId, serverConsumerTransportId, url
-  )
+  // FIX: wrap in try/catch and send error AS consume-response
+  // Previously this threw, the index.ts catch sent type:'error',
+  // but the browser WSClient was waiting for 'consume-response' → timeout.
+  try {
+    const { params } = await mediasoup.createConsumer(
+      socketId, rtpCapabilities, remoteProducerId, serverConsumerTransportId, url
+    )
 
-  ws.send(JSON.stringify({
-    type:    'consume-response',
-    payload: { params }
-  }))
+    ws.send(JSON.stringify({
+      type:    'consume-response',
+      payload: { params }
+    }))
 
-  console.log(`[consume] socketId=${socketId} producerId=${remoteProducerId} server=${url}`)
+    console.log(`[consume] socketId=${socketId} producerId=${remoteProducerId} server=${url}`)
+
+  } catch (err: any) {
+    console.error(`[consume] failed for producerId=${remoteProducerId}:`, err.message)
+    // Send error as consume-response so browser gets it instead of timing out
+    ws.send(JSON.stringify({
+      type:    'consume-response',
+      payload: { params: { error: err.message } }
+    }))
+  }
 }

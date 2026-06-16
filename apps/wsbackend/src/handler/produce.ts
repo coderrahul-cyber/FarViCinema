@@ -107,7 +107,7 @@ export const handleProduce = async (
 
   const roomName = await getRoomForSocket(socketId)
   if (roomName) {
-    await broadcastToRoom(roomName, socketId, 'new-producer', { producerId })
+    await broadcastToRoom(roomName, socketId, 'new-producer', { producerId , producerSocketId: socketId  })
   }
 
   ws.send(JSON.stringify({

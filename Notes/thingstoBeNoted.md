@@ -8,6 +8,11 @@ Table of Contents:
   - [ENV PROBLEM IN TURBOREPO (I don't know what happen after this the code runs fine , if future it crash use the method below to fix it again)](#env-problem-in-turborepo-i-dont-know-what-happen-after-this-the-code-runs-fine--if-future-it-crash-use-the-method-below-to-fix-it-again)
   - [NGINX AND COTURN THINGS](#nginx-and-coturn-things)
     - [1. Nginx config for dev](#1-nginx-config-for-dev)
+    - [2. regenerate SSL cert to cover your LAN IP](#2-regenerate-ssl-cert-to-cover-your-lan-ip)
+      - [Change 2 — frontend/.env.local](#change-2--frontendenvlocal)
+      - [Change 3 — install mkcert's root CA on your Android phone (one time)](#change-3--install-mkcerts-root-ca-on-your-android-phone-one-time)
+      - [Change 4 — restart NGINX with the new cert](#change-4--restart-nginx-with-the-new-cert)
+      - [Change 5 — restart Next.js](#change-5--restart-nextjs)
   - [COMMANDS](#commands)
 
 ### For localy tesing
@@ -72,6 +77,46 @@ The nginx.dev.conf file is set up to proxy WebSocket requests to the Bun WS serv
 But for local developement use the ws not wss because we are not using TLS in dev, and for production use wss because we will have TLS certs.
 
 
+#### 2. regenerate SSL cert to cover your LAN IP
+The current mkcert cert is only valid for localhost. Your phone connects to 192.168.x.x so it gets an SSL mismatch error. Regenerate it 
+
+__Replace 192.168.1.37 with your actual LAN IP__
+```bash
+mkcert -cert-file nginx/ssl/cert.pem -key-file nginx/ssl/key.pem localhost 127.0.0.1 192.168.1.37
+```
+* Then copy the same cert to coturn and mediasoup ssl folders if they exist:
+```bash
+cp nginx/ssl/cert.pem coturn/ssl/cert.pem
+cp nginx/ssl/key.pem  coturn/ssl/key.pem
+```
+##### Change 2 — frontend/.env.local
+Switch both URLs to go through NGINX over HTTPS/WSS:
+```bash
+NEXT_PUBLIC_WS_URL=wss://192.168.1.37/ws
+```
+The frontend URL on the phone becomes https://192.168.1.37 — NGINX proxies everything.
+##### Change 3 — install mkcert's root CA on your Android phone (one time)
+This is what makes Chrome on Android trust your self-signed cert. Without this you get a security error and mediaDevices is still blocked.
+```bash
+#Find where mkcert stores its root CA
+mkcert -CAROOT
+# Prints something like: C:\Users\YourName\AppData\Local\mkcert
+```
+Go to that folder, find rootCA.pem. Send it to your phone — email it to yourself, upload to Google Drive, or copy via USB.  
+ Then on Android:
+```bash
+Settings → Security → Encryption & credentials → Install a certificate → CA certificate → Install anyway → pick rootCA.pem
+Exact path varies slightly by Android version — search "install CA certificate" in Settings if you can't find it.
+```
+##### Change 4 — restart NGINX with the new cert
+
+##### Change 5 — restart Next.js
+
+
+After all this, on the phone open:  
+__https://192.168.1.37/room/test-room?token=eyJ...__  
+No port number — NGINX handles 443. Chrome will trust the cert (because you installed the CA), mediaDevices becomes available, camera permission prompt appears, done.  
+On the laptop you can keep using http://localhost:3001 directly or https://localhost through NGINX — both work. But update .env.local to wss://192.168.1.37/ws on the laptop too, since that's the WS URL baked into the Next.js build now.
 
 
 

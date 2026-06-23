@@ -1,0 +1,96 @@
+// src/tus/hooks.ts
+//
+// Lifecycle hooks passed into the TUS Server (see server.ts).
+// Three hooks matter for this chunk:
+//
+//   onIncomingRequest — fires before every POST/PATCH/HEAD/DELETE.
+//     No auth system exists yet, so this currently only validates
+//     that the videoId exists and is in a state that allows
+//     uploading. Swap in real auth here later — this is the only
+//     function that needs to change.
+//
+//   onUploadCreate — fires once, right when the upload resource is
+//     first created (the initial POST). This is where we learn the
+//     upload ID TUS generated — which is also the literal S3 object
+//     key (see server.ts's comment on why we don't control this
+//     ourselves via namingFunction). We record it on the video so
+//     the future worker knows which S3 object to read.
+//
+//   onUploadFinish — fires once the last byte is received. Marks
+//     the video "processing" in the DB. Does NOT enqueue a
+//     transcoding job yet (no BullMQ/Redis set up) — that's the
+//     next chunk. Left as an explicit TODO rather than faking it.
+
+import {
+  findVideoById,
+  updateVideoStatus,
+  setVideoS3Key,
+} from "../db/video-respository";
+
+function getVideoId(req: Request): string {
+  const videoId = req.headers.get("x-video-id");
+  if (!videoId) {
+    throw { status_code: 400, body: "Missing X-Video-Id header" };
+  }
+  return videoId;
+}
+
+export async function onIncomingRequest(req: Request): Promise<void> {
+  const videoId = getVideoId(req);
+
+  const video = await findVideoById(videoId);
+  if (!video) {
+    throw { status_code: 404, body: "No video record found for this X-Video-Id" };
+  }
+
+  // Once a video is "ready" or actively "processing", it shouldn't
+  // accept new upload bytes — this would only happen from a stale
+  // client retrying after the fact.
+  if (video.status === "ready" || video.status === "processing") {
+    throw {
+      status_code: 409,
+      body: `Video is already ${video.status} and cannot accept new uploads`,
+    };
+  }
+
+  // First chunk for this upload — flip the DB status so the rest of
+  // the app knows bytes are in flight.
+  if (video.status === "awaiting_upload") {
+    await updateVideoStatus(videoId, "uploading");
+  }
+
+  // TODO(auth): once auth exists, verify the bearer token here and
+  // confirm video.userId === authenticatedUser.id before continuing.
+}
+
+export async function onUploadCreate(
+  req: Request,
+  upload: { id: string },
+): Promise<{ metadata?: Record<string, string | null> }> {
+  const videoId = getVideoId(req);
+
+  // upload.id is TUS's own generated ID (slug-safe, no slashes) and
+  // also the exact S3 object key in the raw-uploads bucket.
+  await setVideoS3Key(videoId, upload.id);
+
+  console.log(`Upload created for video ${videoId} -> S3 key "${upload.id}"`);
+
+  return {};
+}
+
+export async function onUploadFinish(
+  req: Request,
+  upload: { id: string },
+): Promise<{ status_code?: number; headers?: Record<string, string | number>; body?: string }> {
+  const videoId = getVideoId(req);
+
+  // TODO(queue): enqueue the transcoding job here once BullMQ/Redis
+  // is set up (next chunk). For now we just record that the raw
+  // file landed successfully.
+  await updateVideoStatus(videoId, "processing");
+
+  console.log(`Upload finished for video ${videoId} (upload id: ${upload.id}) — ready to enqueue transcoding`);
+
+  // Empty object = accept the default 204 response, no override.
+  return {};
+}

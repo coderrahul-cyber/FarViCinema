@@ -47,3 +47,39 @@ export type ConnectionState =
   | 'reconnecting'   // phase 3: lost connection, auto-retrying
   | 'error'
   | 'disconnected'
+
+
+  // streaming 
+  
+export type UploadStatus =
+  | "idle"
+  | "validating"
+  | "creating-record" // POST /api/videos in flight
+  | "uploading"
+  | "paused"
+  | "success"
+  | "error";
+ 
+export interface UploadState {
+  status: UploadStatus;
+  /** 0–100. Only meaningful while status is "uploading" or "paused". */
+  progressPercent: number;
+  /** Bytes uploaded so far — used to show "120 MB / 500 MB" style detail. */
+  bytesUploaded: number;
+  bytesTotal: number;
+  videoId: string | null;
+  errorMessage: string | null;
+  /** True once we've detected and resumed a previous incomplete upload. */
+  resumedFromPrevious: boolean;
+}
+ 
+export const INITIAL_UPLOAD_STATE: UploadState = {
+  status: "idle",
+  progressPercent: 0,
+  bytesUploaded: 0,
+  bytesTotal: 0,
+  videoId: null,
+  errorMessage: null,
+  resumedFromPrevious: false,
+};
+ 

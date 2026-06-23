@@ -37,6 +37,41 @@ model Room {
 }
 
 
+// Mirrors the state machine from the pipeline doc:
+//   awaiting_upload -> uploading -> processing -> ready
+//                                              \-> failed
+enum VideoStatus {
+  awaiting_upload
+  uploading
+  processing
+  ready
+  failed
+}
 
+model Video {
+  id        String      @id @default(uuid())
+  userId    String?     // nullable for now — no auth wired up yet
+  filename  String
+  filesize  BigInt      // bytes; BigInt because files can exceed 2^31
+  mimetype  String
+  duration  Float?      // seconds; unknown until after transcoding
+  status    VideoStatus @default(awaiting_upload)
 
+  // The TUS-generated upload ID, which is also the literal S3 object
+  // key in the raw-uploads bucket (S3Store has no separate key/prefix
+  // option — the upload ID IS the key). Null until the upload starts
+  // (set in tus/hooks.ts's onUploadCreate). The transcoding worker
+  // reads this to know which object to download.
+  s3Key String?
 
+  // Populated by the transcoding worker once ready (future chunk)
+  jobId       String?
+  playbackUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("videos")
+}

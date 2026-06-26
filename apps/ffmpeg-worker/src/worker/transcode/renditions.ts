@@ -1,4 +1,3 @@
-// src/worker/transcode/renditions.ts
 //
 // The four output qualities, matching the pipeline doc's spec
 // exactly. Two separate tables here on purpose: RENDITION_SPECS

@@ -1,5 +1,4 @@
 /**
- * src/index.js  —  room-router
  *
  * Lightweight Express service (~100 lines).
  * Answers ONE question: which mediasoup server owns this room?

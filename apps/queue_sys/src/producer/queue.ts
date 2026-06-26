@@ -1,5 +1,3 @@
-// src/producer/queue.ts
-//
 // The Queue instance — this is what actually writes jobs into
 // Redis. Only the producer process touches this file; the worker
 // has its own separate Worker instance in worker/worker.ts.

@@ -1,5 +1,3 @@
-// src/db/types.ts
-//
 // VideoStatus used to be imported from "@prisma/client". Now that
 // Postgres/Prisma is removed for local testing, this is the single
 // source of truth for the state machine instead:

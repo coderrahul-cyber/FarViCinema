@@ -1,5 +1,3 @@
-// src/lib/queue-client.ts
-//
 // Thin HTTP client for the queuing-system's producer (a fully
 // separate Bun process/repo — see ../../../queuing-system). The main
 // backend never touches Redis or BullMQ directly; it just tells the

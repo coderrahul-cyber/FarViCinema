@@ -1,5 +1,3 @@
-// src/lib/cache-redis.ts
-//
 // Dedicated Redis client for the GET /api/videos list cache. Not
 // the same Redis/connection as anything queue-related — this is a
 // small, read-heavy JSON blob cache with its own instance (see

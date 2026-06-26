@@ -1,5 +1,4 @@
-// src/s3.ts
-//
+
 // One shared Bun.S3Client instance, pointed at MinIO for local dev.
 // Every other file (routes, TUS store, future worker) imports `s3`
 // and `BUCKETS` from here instead of constructing its own client.

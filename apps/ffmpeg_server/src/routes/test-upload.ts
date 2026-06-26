@@ -1,5 +1,3 @@
-// src/routes/test-upload.ts
-//
 // Carried over from chunk 1 — uploads public/test.mp4 straight into
 // MinIO. Kept as an independent sanity check that doesn't depend on
 // TUS, the DB, or anything else: if this route ever stops working,

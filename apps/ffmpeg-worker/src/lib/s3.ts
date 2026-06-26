@@ -1,30 +1,3 @@
-// // src/lib/s3.ts
-// //
-// // Bun's native S3 client, same pattern as the main backend's
-// // src/s3.ts. Used here for plain object get/put — downloading the
-// // raw upload and uploading the finished HLS segments. Not used for
-// // anything multipart/resumable (that's TUS's job, in the main
-// // backend, not here).
-
-// import { env } from "../config/env";
-
-// export const s3 = new Bun.S3Client({
-//   endpoint: env.S3_ENDPOINT,
-//   region: env.AWS_REGION,
-//   accessKeyId: env.AWS_ACCESS_KEY_ID,
-//   secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-//   virtualHostedStyle: false, // path-style URLs, required for MinIO
-// });
-
-// export const BUCKETS = {
-//   raw: env.S3_RAW_BUCKET,
-//   hls: env.S3_HLS_BUCKET,
-// } as const;
-
-
-//new 
-// src/lib/s3.ts
-//
 // MinIO-compatible S3 client using AWS SDK v3.
 //
 // Bun's native Bun.S3Client has a known native-level panic when used

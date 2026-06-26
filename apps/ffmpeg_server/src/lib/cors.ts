@@ -1,5 +1,3 @@
-// src/lib/cors.ts
-//
 // The Next.js frontend runs on a different origin (localhost:3001)
 // than this API (localhost:3000), so every response needs CORS
 // headers or the browser blocks it before your code ever sees it.

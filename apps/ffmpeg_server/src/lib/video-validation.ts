@@ -1,5 +1,4 @@
-// src/lib/video-validation.ts
-//
+
 // Single source of truth for "what counts as a valid video upload".
 // Imported by both the pre-flight route (POST /api/videos) and the
 // TUS server hooks — duplicating these constants in two places is

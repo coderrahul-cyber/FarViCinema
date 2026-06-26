@@ -1,5 +1,3 @@
-// src/tus/store.ts
-//
 // @tus/s3-store is built on @aws-sdk/client-s3, not Bun's native
 // S3Client — TUS needs S3's multipart-upload APIs to implement
 // resumability, which Bun's lightweight client doesn't expose.

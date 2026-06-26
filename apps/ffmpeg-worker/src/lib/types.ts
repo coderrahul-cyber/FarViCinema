@@ -1,4 +1,3 @@
-// src/lib/types.ts
 //
 // The job payload contract. Kept deliberately minimal for this
 // chunk: just enough for the worker to know which S3 object to

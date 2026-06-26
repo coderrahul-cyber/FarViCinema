@@ -1,5 +1,3 @@
-// src/db/memory-store.ts
-//
 // In-memory replacement for Postgres/Prisma, for local testing only.
 //
 // IMPORTANT — this is NOT persistent: every video record lives in a

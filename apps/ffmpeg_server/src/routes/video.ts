@@ -1,5 +1,3 @@
-// src/routes/videos.ts
-//
 // Step 2 from the pipeline doc: before any bytes are uploaded, the
 // browser asks us to create a DB row so it has a videoId to attach
 // to the TUS upload (via the X-Video-Id header).

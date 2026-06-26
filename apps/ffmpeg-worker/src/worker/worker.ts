@@ -1,8 +1,3 @@
-
-///new 
-
-// src/worker/worker.ts
-//
 // The actual job consumer — runs as its own process (`bun run
 // worker`), fully separate from the producer. Per request, this
 // worker runs in the SAME process/server as the producer's queue

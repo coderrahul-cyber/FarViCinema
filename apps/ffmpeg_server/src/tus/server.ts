@@ -1,5 +1,4 @@
-// src/tus/server.ts
-//
+
 // Assembles the @tus/server Server instance: wires the MinIO-backed
 // S3Store (store.ts) together with the access-control / DB hooks
 // (hooks.ts). Imported by index.ts and mounted directly into

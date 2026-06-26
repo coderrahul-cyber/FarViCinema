@@ -1,7 +1,4 @@
-// src/auth/auth.ts
-//
-// STUB AUTH — replace before going to production.
-//
+
 // The pipeline doc's TUS hooks call `verifyToken(token)` to resolve
 // a Bearer token into a user, then check `video.userId === user.id`
 // before accepting any upload bytes (this ownership check is the

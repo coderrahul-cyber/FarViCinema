@@ -1,4 +1,3 @@
-// src/worker/transcode/run-ffmpeg.ts
 //
 // Runs ffmpeg for a single rendition via Bun.spawn — no
 // fluent-ffmpeg wrapper, since that adds another layer of

@@ -1,5 +1,3 @@
-// src/lib/redis-connection.ts
-//
 // Two different connection "personalities", per BullMQ's own
 // guidance: a producer fronting an HTTP request should fail fast if
 // Redis is down (the caller is waiting synchronously); a worker

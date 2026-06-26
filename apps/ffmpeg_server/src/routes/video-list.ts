@@ -1,5 +1,3 @@
-// src/routes/video-list.ts
-//
 // GET /api/videos — powers the homepage grid. Cache-aside: check
 // Redis first; on a miss, query Postgres and repopulate Redis before
 // responding. Self-heals if the cache is ever empty, flushed, or out

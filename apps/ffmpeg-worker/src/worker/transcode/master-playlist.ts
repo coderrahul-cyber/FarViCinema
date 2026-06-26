@@ -1,4 +1,3 @@
-// src/worker/transcode/master-playlist.ts
 //
 // The master playlist is the entry point the player loads first —
 // it lists every rendition with its bandwidth/resolution so the

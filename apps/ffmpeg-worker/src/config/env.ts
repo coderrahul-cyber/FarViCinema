@@ -1,4 +1,3 @@
-// src/config/env.ts
 //
 // Single source of truth for environment variables, same pattern
 // used in the main backend project.

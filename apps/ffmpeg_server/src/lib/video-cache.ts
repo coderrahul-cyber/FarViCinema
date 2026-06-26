@@ -1,5 +1,3 @@
-// src/lib/video-cache.ts
-//
 // Cache-aside for the "ready videos" list shown on the homepage.
 // One Redis key holds the whole list as a JSON array — simplest
 // structure, fine at this scale. On a cache miss, the caller (see

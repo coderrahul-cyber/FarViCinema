@@ -1,7 +1,3 @@
-// src/config/env.ts
-//
-// Single source of truth for environment variables, same pattern
-// used in the main backend project.
 
 export const env = {
   REDIS_URL: process.env.REDIS_URL ?? "redis://localhost:6379",

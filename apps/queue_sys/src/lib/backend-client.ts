@@ -1,5 +1,3 @@
-// src/lib/backend-client.ts
-//
 // Thin HTTP client for the main video-streaming-backend's status
 // endpoint. queuing-system has no direct database access by design
 // — this is the only way it communicates a result back once a

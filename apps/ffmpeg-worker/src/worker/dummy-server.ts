@@ -1,5 +1,3 @@
-// src/worker/dummy-server.ts
-//
 // Stands in for "the real work" while we prove the queue itself
 // works. Run this as its own process (`bun run dummy-server`)
 // alongside the producer and worker. Every job the worker picks up

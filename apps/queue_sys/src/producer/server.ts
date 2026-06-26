@@ -1,5 +1,3 @@
-// src/producer/server.ts
-//
 // The producer's HTTP surface. The main backend's onUploadFinish
 // hook calls POST /jobs here once a video upload completes. This
 // process's only responsibility is "accept the request, validate

@@ -19,7 +19,7 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-videocall_secret}", "ping"]
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 5
 
   # Web UI to inspect Redis keys visually — open http://localhost:8081
@@ -37,5 +37,31 @@ services:
     ports:
       - "8081:8081"
 
+ # Dedicated Redis for the video-list cache (GET /api/videos).
+  # Separate from the "redis" service above on purpose — different
+  # workload (one small JSON blob, read-heavy) and a different
+  # consumer (this backend only, not shared with anything else).
+  # Runs on host port 6380 so it doesn't collide with the Redis above.
+  cache-redis:
+    image: redis:7.2-alpine
+    container_name: video-cache-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    command: >
+      redis-server
+      --requirepass ${CACHE_REDIS_PASSWORD:-cache_secret}
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - ../../cache_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${CACHE_REDIS_PASSWORD:-cache_secret}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+ 
 volumes:
   redis_data:
+  cache_redis_data:
+ 

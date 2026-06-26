@@ -1,0 +1,23 @@
+{
+  "name": "ffmpeg-worker",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "concurrently": "^10.0.3",
+    "cross-env": "^10.1.0"
+  },
+  "scripts": {
+    "worker": "bun run src/worker/worker.ts",
+   "workers": "concurrently --names \"W1,W2\" --prefix-colors \"blue,green\" \"cross-env WORKER_ID=Worker-1 bun run src/worker/worker.ts\" \"cross-env WORKER_ID=Worker-2 bun run src/worker/worker.ts\""
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1075.0",
+    "@aws-sdk/lib-storage": "^3.1075.0",
+    "bullmq": "^5.79.1"
+  }
+}

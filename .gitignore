@@ -47,3 +47,6 @@ couturn/ssl
 nginx/ssl
 
 minio-data/
+
+cache_redis_data/
+

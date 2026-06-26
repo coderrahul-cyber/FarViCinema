@@ -10,8 +10,7 @@
   }
 }
 
-html,
-body {
+html, body {
   max-width: 100vw;
   overflow-x: hidden;
 }
@@ -46,5 +45,25 @@ a {
   }
   .imgDark {
     display: unset;
+  }
+}
+
+/* --- Added for the video grid / watch pages --- */
+
+/* Fixed dark UI for the video pages, regardless of system color
+   scheme — these pages use the #0A0A0B / #F2F0EB palette directly
+   rather than the --background/--foreground variables above. */
+.video-app {
+  background: #0a0a0b;
+  color: #f2f0eb;
+  min-height: 100vh;
+}
+
+@keyframes loading-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
   }
 }

@@ -1,0 +1,21 @@
+{
+  "name": "queue_sys",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "scripts": {
+    "producer": "bun run --watch src/producer/server.ts"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1075.0",
+    "@aws-sdk/lib-storage": "^3.1075.0",
+    "bullmq": "^5.79.1",
+    "ioredis": "^5.11.1"
+  }
+}

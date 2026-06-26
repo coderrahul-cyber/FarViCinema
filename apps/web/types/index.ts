@@ -83,3 +83,27 @@ export const INITIAL_UPLOAD_STATE: UploadState = {
   resumedFromPrevious: false,
 };
  
+
+
+// lib/types.ts
+//
+// Mirrors the backend's CachedVideoEntry shape exactly (see
+// video-streaming-backend/src/lib/video-cache.ts). filesize stays a
+// string here too — it crossed JSON as a string on the backend
+// specifically because BigInt can't survive JSON.stringify, so we
+// keep that shape rather than re-parsing it back into a number we'd
+// have to handle precision-loss risk for.
+
+export interface VideoListEntry {
+  id: string;
+  filename: string;
+  filesize: string;
+  duration: number | null;
+  playbackUrl: string;
+  createdAt: string;
+}
+
+export interface VideoListResponse {
+  videos: VideoListEntry[];
+  source: "cache" | "db";
+}

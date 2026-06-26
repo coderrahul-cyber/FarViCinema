@@ -7,17 +7,17 @@
     "@types/bun": "latest",
     "@types/node": "^26.0.0",
     "@repo/db": "workspace:*"
-
   },
   "scripts": {
     "start": "bun run ./src/index.ts",
-      "dev": "bun run --watch src/index.ts"
+    "dev": "bun run --watch src/index.ts"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
     "@tus/s3-store": "^2.0.4",
-    "@tus/server": "^2.4.1"
+    "@tus/server": "^2.4.1",
+    "ioredis": "^5.11.1"
   }
 }
